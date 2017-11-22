@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"oauth2/model"
 	"oauth2/oauth"
@@ -33,14 +34,11 @@ func main() {
 
 	clients := getClient()
 	for _, c := range clients {
-
 		scopes := getScopesClient(c.ID)
-
 		var scopesString []string
 		for _, s := range scopes {
 			scopesString = append(scopesString, s.Name)
 		}
-
 		client := &oauth.Client{
 			ID:     fmt.Sprint(c.ID),
 			Secret: c.Secret,
@@ -80,6 +78,7 @@ func main() {
 
 	//Доступные типы авторизации
 	server.SetAllowedGrantType("client_credentials", "password")
+	server.SetAllowedResponseType("code", "token")
 
 	//Обработка ролей
 	server.SetClientScopeHandler(clientScopeHandler)
@@ -92,6 +91,9 @@ func main() {
 	{
 		auth.GET("/token", server.HandleTokenRequest)  //Получение токена client_credentials, password
 		auth.POST("/token", server.HandleTokenRequest) //Получение токена client_credentials, password
+		//auth.GET("/authorize", server.HandleAuthorizeRequest)
+		//auth.POST("/authorize", server.HandleAuthorizeRequest)
+		auth.GET("/authorize", server.HandleTokenVerify())
 	}
 
 	api := g.Group("api")
@@ -110,11 +112,13 @@ func main() {
 }
 
 func clientScopeHandler(clientID, scope string) (allowed bool, err error) {
-	fmt.Println("Scope handler", clientID, scope)
-	if scope == "read" {
-		return true, nil
+	scopes := strings.Split(scope, " ")
+	for _, s := range scopes {
+		if err := clientScope(clientID, s); err != nil {
+			return false, err
+		}
 	}
-	return false, nil
+	return true, nil
 }
 
 func passwordAuthorizationHandler(username, password string) (userID string, err error) {
@@ -177,4 +181,13 @@ func login(username, password string) (model.User, error) {
 	var user model.User
 	err := Db.Where("login = ? AND password = ?", username, password).First(&user).Error
 	return user, err
+}
+
+func clientScope(clientID, role string) error {
+	var client model.Client
+	Db.Where("ID = ?", clientID).First(&client)
+	var scope model.Scope
+	Db.Where("name = ?", role).First(&scope)
+	var clientScope model.ClientScopes
+	return Db.Where("client_id = ? AND scope_id = ?", client.ID, scope.ID).First(&clientScope).Error
 }
