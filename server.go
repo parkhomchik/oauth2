@@ -3,12 +3,15 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
+	//"time"
 
 	"oauth2/model"
 	"oauth2/oauth"
 
+	//"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-oauth2/gin-server"
 	"github.com/jinzhu/gorm"
@@ -49,7 +52,6 @@ func main() {
 		fmt.Println("Scope: ", client.Scope)
 		clientStore.Set(client.ID, client)
 	}
-
 	users := getUsers()
 	for _, u := range users {
 		scopes := getScopesUser(u.ID)
@@ -86,14 +88,33 @@ func main() {
 	server.SetPasswordAuthorizationHandler(passwordAuthorizationHandler)
 
 	g := gin.Default()
+	g.Use(CORSMiddleware())
+
+	g.GET("/.well-known/openid-configuration", func(c *gin.Context) {
+		data, err := ioutil.ReadFile("config/openid-configuration")
+		if err != nil {
+			fmt.Println(err)
+		}
+		c.String(http.StatusOK, string(data))
+	})
 
 	auth := g.Group("/oauth2")
 	{
 		auth.GET("/token", server.HandleTokenRequest)  //Получение токена client_credentials, password
 		auth.POST("/token", server.HandleTokenRequest) //Получение токена client_credentials, password
-		//auth.GET("/authorize", server.HandleAuthorizeRequest)
-		//auth.POST("/authorize", server.HandleAuthorizeRequest)
-		auth.GET("/authorize", server.HandleTokenVerify())
+
+		auth.GET("")
+
+		checkToken := auth.Group("/check") //Проверка токена
+
+		checkToken.Use(server.HandleTokenVerify())
+		checkToken.GET("", func(c *gin.Context) {
+			ti, exists := c.Get("AccessToken")
+			if exists {
+				c.JSON(http.StatusOK, ti)
+				return
+			}
+		})
 	}
 
 	api := g.Group("api")
@@ -108,6 +129,43 @@ func main() {
 			c.String(http.StatusOK, "not found")
 		})
 	}
+
+	connect := g.Group("connect")
+	{
+		connect.Use(server.HandleTokenVerify())
+		connect.GET("/userinfo", func(c *gin.Context) {
+			data, err := ioutil.ReadFile("info.json")
+			if err != nil {
+				fmt.Println(err)
+			}
+			//dataBytes := bytes.NewReader(data)
+			c.String(http.StatusOK, string(data))
+		})
+	}
+
+	/*http.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("/openid-configuration")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		data, err := ioutil.ReadFile("openid-configuration.json")
+		if err != nil {
+			fmt.Fprint(w, err)
+		}
+		http.ServeContent(w, r, "openid-configuration.json", time.Now(), bytes.NewReader(data))
+	})*/
+	/*
+		g.Use(cors.New(cors.Config{
+			AllowOrigins:     []string{"http://localhost:4200/points"},
+			AllowMethods:     []string{"PUT", "GET"},
+			AllowHeaders:     []string{"Origin", "Authorization"},
+			ExposeHeaders:    []string{"Content-Length"},
+			AllowCredentials: true,
+			AllowOriginFunc: func(origin string) bool {
+				return origin == "https://github.com"
+			},
+			MaxAge: 12 * time.Hour,
+		}))
+	*/
 	g.Run(":9096")
 }
 
@@ -134,7 +192,18 @@ func encryptPassword(password string) string {
 }
 
 func initDB() {
-	Db, _ = gorm.Open("postgres", "host=localhost user=postgres dbname=oauth2 sslmode=disable password=parkhom4ik")
+	var configuration model.Configuration
+	configuration.Load()
+	dbinfo := fmt.Sprintf("host=%s user=%s dbname=%s password=%s sslmode=disable", configuration.DbHost, configuration.DbUser, configuration.DbName, configuration.DbPass)
+	//Db, _ = gorm.Open("postgres", dbinfo)
+	var err error
+	Db, err = gorm.Open("postgres", dbinfo)
+	if err != nil {
+		fmt.Println(err)
+		panic(err)
+	}
+	//defer Db.Close()
+
 	Db.LogMode(true)
 	Db.AutoMigrate(&model.User{}, &model.Client{}, &model.Scope{})
 }
@@ -190,4 +259,15 @@ func clientScope(clientID, role string) error {
 	Db.Where("name = ?", role).First(&scope)
 	var clientScope model.ClientScopes
 	return Db.Where("client_id = ? AND scope_id = ?", client.ID, scope.ID).First(&clientScope).Error
+}
+
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		fmt.Println("header set - start")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT")
+		fmt.Println("header set - end")
+		c.Next()
+	}
 }
