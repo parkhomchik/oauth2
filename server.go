@@ -8,8 +8,8 @@ import (
 	"strings"
 	//"time"
 
-	"oauth2/model"
-	"oauth2/oauth"
+	"github.com/parkhomchik/oauth2/model"
+	"github.com/parkhomchik/oauth2/oauth"
 
 	//"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -132,40 +132,23 @@ func main() {
 
 	connect := g.Group("connect")
 	{
-		connect.Use(server.HandleTokenVerify())
+		//connect.Use(server.HandleTokenVerify())
+
+		connect.OPTIONS("/userinfo", func(c *gin.Context) {
+			server.HandleTokenVerify()
+			//fmt.Println(c.Get("AccessToken"))
+			c.Next()
+		})
+
 		connect.GET("/userinfo", func(c *gin.Context) {
-			data, err := ioutil.ReadFile("info.json")
+			server.HandleTokenVerify()
+			data, err := ioutil.ReadFile("config/info.json")
 			if err != nil {
 				fmt.Println(err)
 			}
-			//dataBytes := bytes.NewReader(data)
 			c.String(http.StatusOK, string(data))
 		})
 	}
-
-	/*http.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("/openid-configuration")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		data, err := ioutil.ReadFile("openid-configuration.json")
-		if err != nil {
-			fmt.Fprint(w, err)
-		}
-		http.ServeContent(w, r, "openid-configuration.json", time.Now(), bytes.NewReader(data))
-	})*/
-	/*
-		g.Use(cors.New(cors.Config{
-			AllowOrigins:     []string{"http://localhost:4200/points"},
-			AllowMethods:     []string{"PUT", "GET"},
-			AllowHeaders:     []string{"Origin", "Authorization"},
-			ExposeHeaders:    []string{"Content-Length"},
-			AllowCredentials: true,
-			AllowOriginFunc: func(origin string) bool {
-				return origin == "https://github.com"
-			},
-			MaxAge: 12 * time.Hour,
-		}))
-	*/
 	g.Run(":9096")
 }
 
@@ -263,11 +246,9 @@ func clientScope(clientID, role string) error {
 
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		fmt.Println("header set - start")
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "authorization")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT")
-		fmt.Println("header set - end")
 		c.Next()
 	}
 }

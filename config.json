@@ -1,0 +1,7 @@
+{
+    "DbHost": "localhost",
+	"DbUser": "postgres",
+    "DbPass": "Pass_1989",
+    "DbName": "oauth2"
+    
+}
