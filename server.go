@@ -7,12 +7,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
-	//"time"
 
 	"oauth2/model"
 	"oauth2/oauth"
 
-	//"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-oauth2/gin-server"
 	"github.com/jinzhu/gorm"
@@ -25,6 +23,7 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
+//Db переменная для конекции
 var Db *gorm.DB
 
 func main() {
