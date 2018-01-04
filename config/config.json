@@ -1,0 +1,6 @@
+{
+    "DbHost": "localhost",
+	"DbUser": "fba_user",
+    "DbPass": "password",
+    "DbName": "oauth_db"
+}

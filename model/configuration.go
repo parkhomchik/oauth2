@@ -15,7 +15,7 @@ type Configuration struct {
 
 //Load Загрузка настроек из файла конфигураций
 func (c *Configuration) Load() error {
-	file, _ := os.Open("config.json")
+	file, _ := os.Open("config/config.json")
 	decoder := json.NewDecoder(file)
 	err := decoder.Decode(&c)
 	return err

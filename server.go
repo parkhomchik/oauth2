@@ -2,14 +2,15 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	//"time"
 
-	"github.com/parkhomchik/oauth2/model"
-	"github.com/parkhomchik/oauth2/oauth"
+	"oauth2/model"
+	"oauth2/oauth"
 
 	//"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -88,7 +89,7 @@ func main() {
 	server.SetPasswordAuthorizationHandler(passwordAuthorizationHandler)
 
 	g := gin.Default()
-	g.Use(CORSMiddleware())
+	g.Use(setCORSMiddleware())
 
 	g.GET("/.well-known/openid-configuration", func(c *gin.Context) {
 		data, err := ioutil.ReadFile("config/openid-configuration")
@@ -104,9 +105,7 @@ func main() {
 		auth.POST("/token", server.HandleTokenRequest) //Получение токена client_credentials, password
 
 		auth.GET("")
-
 		checkToken := auth.Group("/check") //Проверка токена
-
 		checkToken.Use(server.HandleTokenVerify())
 		checkToken.GET("", func(c *gin.Context) {
 			ti, exists := c.Get("AccessToken")
@@ -132,21 +131,30 @@ func main() {
 
 	connect := g.Group("connect")
 	{
-		//connect.Use(server.HandleTokenVerify())
-
 		connect.OPTIONS("/userinfo", func(c *gin.Context) {
-			server.HandleTokenVerify()
-			//fmt.Println(c.Get("AccessToken"))
 			c.Next()
 		})
 
-		connect.GET("/userinfo", func(c *gin.Context) {
-			server.HandleTokenVerify()
-			data, err := ioutil.ReadFile("config/info.json")
-			if err != nil {
-				fmt.Println(err)
+		connect.GET("/userinfo", server.HandleTokenVerify(), func(c *gin.Context) {
+			ti, exists := c.Get("AccessToken")
+			if exists {
+				var tokenInfo model.TokenInfo
+				var user model.User
+
+				bodyBytes, err := json.Marshal(ti)
+				if err != nil {
+					fmt.Println(err)
+				}
+				json.Unmarshal(bodyBytes, &tokenInfo)
+
+				if err := Db.Where("id = ?", tokenInfo.UserID).Find(&user).Error; err != nil {
+					c.JSON(404, err)
+					return
+				}
+				c.JSON(200, &user)
+				return
 			}
-			c.String(http.StatusOK, string(data))
+			c.String(http.StatusOK, "not found")
 		})
 	}
 	g.Run(":9096")
@@ -244,7 +252,7 @@ func clientScope(clientID, role string) error {
 	return Db.Where("client_id = ? AND scope_id = ?", client.ID, scope.ID).First(&clientScope).Error
 }
 
-func CORSMiddleware() gin.HandlerFunc {
+func setCORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "authorization")
