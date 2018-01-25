@@ -98,6 +98,40 @@ func main() {
 		c.String(http.StatusOK, string(data))
 	})
 
+	g.POST("/registrationuser", func(c *gin.Context) {
+		var userInf model.User
+		if err := c.Bind(&userInf); err != nil {
+			c.JSON(http.StatusBadRequest, err)
+			return
+		}
+		if userInf.Password != "" {
+			userInf.Password = encryptPassword(userInf.Password)
+		}
+		userInf, err := registrationUser(userInf)
+		if err != nil {
+			c.String(http.StatusBadRequest, err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, userInf)
+	})
+
+	g.POST("/registrationclient", func(c *gin.Context) {
+		var clientInf model.Client
+		if err := c.Bind(&clientInf); err != nil {
+			c.JSON(http.StatusBadRequest, err)
+			return
+		}
+		if clientInf.Secret != "" {
+			clientInf.Secret = encryptPassword(clientInf.Secret)
+		}
+		clientInf, err := registrationClient(clientInf)
+		if err != nil {
+			c.String(http.StatusBadRequest, err.Error())
+			return
+		}
+		c.JSON(http.StatusOK, clientInf)
+	})
+
 	auth := g.Group("/oauth2")
 	{
 		auth.GET("/token", server.HandleTokenRequest)  //Получение токена client_credentials, password
@@ -154,6 +188,23 @@ func main() {
 				return
 			}
 			c.String(http.StatusOK, "not found")
+		})
+
+		connect.PUT("/setuserinfo", server.HandleTokenVerify(), func(c *gin.Context) {
+			var userInf model.User
+			if err := c.Bind(&userInf); err != nil {
+				c.JSON(http.StatusBadRequest, err)
+				return
+			}
+			if userInf.Password != "" {
+				userInf.Password = encryptPassword(userInf.Password)
+			}
+			userInf, err := setUserInfo(userInf)
+			if err != nil {
+				c.String(http.StatusBadRequest, err.Error())
+				return
+			}
+			c.JSON(http.StatusOK, userInf)
 		})
 	}
 	g.Run(":9096")
@@ -258,4 +309,26 @@ func setCORSMiddleware() gin.HandlerFunc {
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT")
 		c.Next()
 	}
+}
+
+func registrationUser(user model.User) (model.User, error) {
+	err := Db.Create(&user).Error
+	return user, err
+}
+
+func registrationClient(client model.Client) (model.Client, error) {
+	err := Db.Create(&client).Error
+	return client, err
+}
+
+func setUserInfo(userInf model.User) (model.User, error) {
+	var user model.User
+	if err := Db.First(&user, userInf.ID).Error; err != nil {
+		return user, err
+	}
+	user = userInf
+	if err := Db.Save(&userInf).Error; err != nil {
+		return user, err
+	}
+	return user, nil
 }
