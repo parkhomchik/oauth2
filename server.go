@@ -27,7 +27,7 @@ import (
 var Db *gorm.DB
 
 func main() {
-	fmt.Println("password: ", encryptPassword("test"))
+	//fmt.Println("password: ", encryptPassword("test"))
 	initDB()
 
 	manager := manage.NewDefaultManager()
@@ -323,7 +323,7 @@ func registrationClient(client model.Client) (model.Client, error) {
 
 func setUserInfo(userInf model.User) (model.User, error) {
 	var user model.User
-	if err := Db.First(&user, userInf.ID).Error; err != nil {
+	if err := Db.Where("id = ?", userInf.ID).First(&user).Error; err != nil {
 		return user, err
 	}
 	user = userInf

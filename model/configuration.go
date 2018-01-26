@@ -7,10 +7,14 @@ import (
 
 //Configuration Настройки приложения
 type Configuration struct {
-	DbUser string
-	DbPass string
-	DbName string
-	DbHost string
+	DbUser       string
+	DbPass       string
+	DbName       string
+	DbHost       string
+	DbPortalHost string
+	DbPortalUser string
+	DbPortalPass string
+	DbPortalName string
 }
 
 //Load Загрузка настроек из файла конфигураций

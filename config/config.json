@@ -2,5 +2,9 @@
     "DbHost": "localhost",
 	"DbUser": "fba_user",
     "DbPass": "password",
-    "DbName": "oauth_db"
+    "DbName": "oauth_db",
+    "DbPortalHost": "localhost",
+	"DbPortalUser": "fba_user",
+    "DbPortalPass": "password",
+    "DbPortalName": "edp0001"
 }
