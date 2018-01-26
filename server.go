@@ -97,7 +97,7 @@ func main() {
 		}
 		c.String(http.StatusOK, string(data))
 	})
-
+	g.OPTIONS("/registrationuser", func(c *gin.Context) { c.Next() })
 	g.POST("/registrationuser", func(c *gin.Context) {
 		var userInf model.User
 		if err := c.Bind(&userInf); err != nil {
@@ -305,7 +305,7 @@ func clientScope(clientID, role string) error {
 func setCORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "authorization, accesstoken, content-type")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT")
 		c.Next()
 	}
