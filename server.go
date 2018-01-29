@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strings"
 
-	"oauth2/model"
-	"oauth2/oauth"
+	"github.com/satori/go.uuid"
+
+	"github.com/parkhomchik/oauth2/model"
+	"github.com/parkhomchik/oauth2/oauth"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-oauth2/gin-server"
@@ -25,6 +27,9 @@ import (
 
 //Db переменная для конекции
 var Db *gorm.DB
+
+//PortalDb переменная для конекции
+var PortalDb *gorm.DB
 
 func main() {
 	//fmt.Println("password: ", encryptPassword("test"))
@@ -249,23 +254,36 @@ func initDB() {
 	Db.AutoMigrate(&model.User{}, &model.Client{}, &model.Scope{})
 }
 
+func initPortalDB() {
+	var configuration model.Configuration
+	configuration.Load()
+	dbinfo := fmt.Sprintf("host=%s user=%s dbname=%s password=%s sslmode=disable", configuration.DbPortalHost, configuration.DbPortalUser, configuration.DbPortalName, configuration.DbPortalPass)
+	var err error
+	PortalDb, err = gorm.Open("postgres", dbinfo)
+	if err != nil {
+		fmt.Println(err)
+		panic(err)
+	}
+	PortalDb.LogMode(true)
+}
+
 func getClient() []model.Client {
 	var clients []model.Client
 	Db.Find(&clients)
 	return clients
 }
 
-func getScopesClient(id uint) []model.Scope {
+func getScopesClient(id uuid.UUID) []model.Scope {
 	var clientScopeID []model.ClientScopes
 	var scopes []model.Scope
 	Db.Where("client_id = ?", id).Find(&clientScopeID)
-	var clientIDs []uint
+	var scopeIDs []uuid.UUID
 
 	for _, uid := range clientScopeID {
-		clientIDs = append(clientIDs, uid.ClientID)
+		scopeIDs = append(scopeIDs, uid.ScopeID)
 	}
 
-	Db.Where("id in (?)", clientIDs).Find(&scopes)
+	Db.Where("id in (?)", scopeIDs).Find(&scopes)
 
 	return scopes
 }
@@ -275,15 +293,15 @@ func getUsers() (users []model.User) {
 	return
 }
 
-func getScopesUser(id uint) []model.Scope {
+func getScopesUser(id uuid.UUID) []model.Scope {
 	var userScopeID []model.UserScopes
 	var scopes []model.Scope
 	Db.Where("user_id = ?", id).Find(&userScopeID)
-	var userIDs []uint
+	var scopeIDs []uuid.UUID
 	for _, uid := range userScopeID {
-		userIDs = append(userIDs, uid.UserID)
+		scopeIDs = append(scopeIDs, uid.ScopeID)
 	}
-	Db.Where("id in (?)", userIDs).Find(&scopes)
+	Db.Where("id in (?)", scopeIDs).Find(&scopes)
 	return scopes
 }
 
@@ -312,8 +330,18 @@ func setCORSMiddleware() gin.HandlerFunc {
 }
 
 func registrationUser(user model.User) (model.User, error) {
-	err := Db.Create(&user).Error
-	return user, err
+	if err := Db.Create(&user).Error; err != nil {
+		return user, err
+	}
+	/*
+		initPortalDB()
+		var staff model.Staff
+		staff.Name = user.Name
+
+		err := PortalDb.Create(&staff).Error
+		PortalDb.Close()
+	*/
+	return user, nil
 }
 
 func registrationClient(client model.Client) (model.Client, error) {

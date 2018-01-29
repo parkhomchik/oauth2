@@ -1,7 +1,11 @@
 package model
 
+import (
+	"github.com/satori/go.uuid"
+)
+
 //TokenInfo данные по токену
 type TokenInfo struct {
-	ClientID string
-	UserID   string
+	ClientID uuid.UUID
+	UserID   uuid.UUID
 }

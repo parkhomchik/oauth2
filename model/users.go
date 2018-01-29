@@ -1,12 +1,18 @@
 package model
 
-import "github.com/jinzhu/gorm"
+import (
+	"time"
+
+	"github.com/satori/go.uuid"
+)
 
 type User struct {
-	//ID       int `gorm:"primary_key"`
-	gorm.Model
-	Name     string
-	Login    string `gorm:"not null;unique"`
-	Password string
-	Scopes   []Scope `gorm:"many2many:user_scopes;"`
+	ID        uuid.UUID `gorm:"primary_key;type:uuid;default:uuid_generate_v4()"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time
+	Name      string
+	Login     string `gorm:"not null;unique"`
+	Password  string
+	Scopes    []Scope `gorm:"many2many:user_scopes;"`
 }
