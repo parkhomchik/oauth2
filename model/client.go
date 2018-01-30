@@ -13,6 +13,6 @@ type Client struct {
 	DeletedAt *time.Time
 	Secret    string
 	Domain    string
-	UserID    string
+	UserID    uuid.UUID
 	Scope     []Scope `gorm:"many2many:client_scopes;"`
 }

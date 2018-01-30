@@ -52,7 +52,7 @@ func main() {
 			Secret: c.Secret,
 			Domain: c.Domain,
 			Scope:  scopesString,
-			UserID: c.UserID,
+			UserID: fmt.Sprint(c.UserID),
 		}
 		fmt.Println("Scope: ", client.Scope)
 		clientStore.Set(client.ID, client)
@@ -120,23 +120,6 @@ func main() {
 		c.JSON(http.StatusOK, userInf)
 	})
 
-	g.POST("/registrationclient", func(c *gin.Context) {
-		var clientInf model.Client
-		if err := c.Bind(&clientInf); err != nil {
-			c.JSON(http.StatusBadRequest, err)
-			return
-		}
-		if clientInf.Secret != "" {
-			clientInf.Secret = encryptPassword(clientInf.Secret)
-		}
-		clientInf, err := registrationClient(clientInf)
-		if err != nil {
-			c.String(http.StatusBadRequest, err.Error())
-			return
-		}
-		c.JSON(http.StatusOK, clientInf)
-	})
-
 	auth := g.Group("/oauth2")
 	{
 		auth.GET("/token", server.HandleTokenRequest)  //Получение токена client_credentials, password
@@ -173,16 +156,17 @@ func main() {
 			c.Next()
 		})
 
+		connect.OPTIONS("/registrationclient", func(c *gin.Context) {
+			c.Next()
+		})
+
 		connect.GET("/userinfo", server.HandleTokenVerify(), func(c *gin.Context) {
 			ti, exists := c.Get("AccessToken")
 			if exists {
 				var tokenInfo model.TokenInfo
 				var user model.User
 
-				bodyBytes, err := json.Marshal(ti)
-				if err != nil {
-					fmt.Println(err)
-				}
+				bodyBytes, _ := json.Marshal(ti)
 				json.Unmarshal(bodyBytes, &tokenInfo)
 
 				if err := Db.Where("id = ?", tokenInfo.UserID).Find(&user).Error; err != nil {
@@ -211,6 +195,29 @@ func main() {
 			}
 			c.JSON(http.StatusOK, userInf)
 		})
+
+		connect.POST("/registrationclient", server.HandleTokenVerify(), func(c *gin.Context) {
+			fmt.Println(c.MustGet("AccessToken"))
+			var tokenInfo model.TokenInfo
+			ti := c.MustGet("AccessToken")
+			bodyBytes, _ := json.Marshal(ti)
+			json.Unmarshal(bodyBytes, &tokenInfo)
+
+			userID := tokenInfo.UserID
+			permissionCheck, err := userScopeHandler(userID, "write")
+			if permissionCheck {
+				var clientInf model.Client
+				clientInf.UserID = userID
+				clientInf, err = registrationClient(clientInf)
+				if err != nil {
+					c.String(http.StatusBadRequest, err.Error())
+					return
+				}
+				c.JSON(http.StatusOK, clientInf)
+			} else {
+				c.JSON(550, err)
+			}
+		})
 	}
 	g.Run(":9096")
 }
@@ -219,6 +226,16 @@ func clientScopeHandler(clientID, scope string) (allowed bool, err error) {
 	scopes := strings.Split(scope, " ")
 	for _, s := range scopes {
 		if err := clientScope(clientID, s); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+func userScopeHandler(userID uuid.UUID, scope string) (allowed bool, err error) {
+	scopes := strings.Split(scope, " ")
+	for _, s := range scopes {
+		if err := userScope(userID, s); err != nil {
 			return false, err
 		}
 	}
@@ -320,6 +337,15 @@ func clientScope(clientID, role string) error {
 	return Db.Where("client_id = ? AND scope_id = ?", client.ID, scope.ID).First(&clientScope).Error
 }
 
+func userScope(userID uuid.UUID, role string) error {
+	var user model.User
+	Db.Where("ID = ?", userID).First(&user)
+	var scope model.Scope
+	Db.Where("name = ?", role).First(&scope)
+	var userScope model.UserScopes
+	return Db.Where("user_id = ? AND scope_id = ?", user.ID, scope.ID).First(&userScope).Error
+}
+
 func setCORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -346,6 +372,11 @@ func registrationUser(user model.User) (model.User, error) {
 
 func registrationClient(client model.Client) (model.Client, error) {
 	err := Db.Create(&client).Error
+	if err != nil {
+		client.Secret = encryptPassword(client.ID.String())
+		err = Db.Save(&client).Error
+		return client, err
+	}
 	return client, err
 }
 
