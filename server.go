@@ -192,7 +192,6 @@ func main() {
 		})
 
 		connect.POST("/registrationclient", server.HandleTokenVerify(), func(c *gin.Context) {
-			fmt.Println(c.MustGet("AccessToken"))
 			var tokenInfo model.TokenInfo
 			ti := c.MustGet("AccessToken")
 			bodyBytes, _ := json.Marshal(ti)
@@ -209,6 +208,33 @@ func main() {
 					return
 				}
 				c.JSON(http.StatusOK, clientInf)
+			} else {
+				c.JSON(550, err)
+			}
+		})
+
+		connect.DELETE("/client/:id", server.HandleTokenVerify(), func(c *gin.Context) {
+			var tokenInfo model.TokenInfo
+			ti := c.MustGet("AccessToken")
+			bodyBytes, _ := json.Marshal(ti)
+			json.Unmarshal(bodyBytes, &tokenInfo)
+			userID := tokenInfo.UserID
+			permissionCheck, err := userScopeHandler(userID, "write")
+			if permissionCheck {
+				id, err := uuid.FromString(c.Param("id"))
+				if err != nil {
+					c.JSON(400, err)
+				}
+				var client model.Client
+				client, err = getClientByID(id, userID)
+				if err != nil {
+					c.JSON(404, err)
+				}
+				if err := deleteClient(client); err != nil {
+					c.JSON(500, err)
+					return
+				}
+				c.JSON(http.StatusOK, client)
 			} else {
 				c.JSON(550, err)
 			}
@@ -283,6 +309,12 @@ func getClient() []model.Client {
 	var clients []model.Client
 	Db.Find(&clients)
 	return clients
+}
+
+func getClientByID(id, userID uuid.UUID) (model.Client, error) {
+	var client model.Client
+	err := Db.Where("id = ? and user_id = ?", id, userID).Find(&client).Error
+	return client, err
 }
 
 func getScopesClient(id uuid.UUID) []model.Scope {
@@ -371,7 +403,7 @@ func registrationUser(user model.User) (model.User, error) {
 
 func registrationClient(client model.Client) (model.Client, error) {
 	err := Db.Create(&client).Error
-	if err != nil {
+	if err == nil {
 		client.Secret = encryptPassword(client.ID.String())
 		err = Db.Save(&client).Error
 		return client, err
@@ -389,4 +421,8 @@ func setUserInfo(userInf model.User) (model.User, error) {
 		return user, err
 	}
 	return user, nil
+}
+
+func deleteClient(client model.Client) error {
+	return Db.Delete(&client).Error
 }
