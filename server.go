@@ -102,7 +102,6 @@ func main() {
 		}
 		c.String(http.StatusOK, string(data))
 	})
-	g.OPTIONS("/registrationuser", func(c *gin.Context) { c.Next() })
 	g.POST("/registrationuser", func(c *gin.Context) {
 		var userInf model.User
 		if err := c.Bind(&userInf); err != nil {
@@ -137,46 +136,42 @@ func main() {
 		})
 	}
 
-	api := g.Group("api")
-	{
-		api.Use(server.HandleTokenVerify())
-		api.GET("/test", func(c *gin.Context) {
-			ti, exists := c.Get("AccessToken")
-			if exists {
-				c.JSON(http.StatusOK, ti)
-				return
-			}
-			c.String(http.StatusOK, "not found")
-		})
-	}
-
 	connect := g.Group("connect")
 	{
-		connect.OPTIONS("/userinfo", func(c *gin.Context) {
-			c.Next()
-		})
-
-		connect.OPTIONS("/registrationclient", func(c *gin.Context) {
-			c.Next()
-		})
-
 		connect.GET("/userinfo", server.HandleTokenVerify(), func(c *gin.Context) {
-			ti, exists := c.Get("AccessToken")
-			if exists {
-				var tokenInfo model.TokenInfo
-				var user model.User
+			ti, _ := c.Get("AccessToken")
 
-				bodyBytes, _ := json.Marshal(ti)
-				json.Unmarshal(bodyBytes, &tokenInfo)
+			var tokenInfo model.TokenInfo
+			var user model.User
 
-				if err := Db.Where("id = ?", tokenInfo.UserID).Find(&user).Error; err != nil {
-					c.JSON(404, err)
-					return
-				}
-				c.JSON(200, &user)
+			bodyBytes, _ := json.Marshal(ti)
+			json.Unmarshal(bodyBytes, &tokenInfo)
+
+			if err := Db.Where("id = ?", tokenInfo.UserID).Find(&user).Error; err != nil {
+				c.JSON(404, err)
 				return
 			}
-			c.String(http.StatusOK, "not found")
+			c.JSON(200, &user)
+		})
+
+		connect.GET("/clientinfo/:clientid", server.HandleTokenVerify(), func(c *gin.Context) {
+			id, err := uuid.FromString(c.Param("clientid"))
+			if err != nil {
+				c.JSON(400, err)
+				return
+			}
+			ti, _ := c.Get("AccessToken")
+			var tokenInfo model.TokenInfo
+			var client model.Client
+
+			bodyBytes, _ := json.Marshal(ti)
+			json.Unmarshal(bodyBytes, &tokenInfo)
+
+			if err := Db.Where("id = ? and user_id = ?", id, tokenInfo.UserID).Find(&client).Error; err != nil {
+				c.JSON(404, err)
+				return
+			}
+			c.JSON(200, &client)
 		})
 
 		connect.PUT("/setuserinfo", server.HandleTokenVerify(), func(c *gin.Context) {
@@ -351,7 +346,11 @@ func setCORSMiddleware() gin.HandlerFunc {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "authorization, accesstoken, content-type")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, PUT")
-		c.Next()
+		if c.Request.Method != "OPTIONS" {
+			c.Next()
+		} else {
+			c.AbortWithStatus(http.StatusOK)
+		}
 	}
 }
 
