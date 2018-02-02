@@ -187,6 +187,7 @@ func main() {
 		})
 
 		connect.POST("/registrationclient", server.HandleTokenVerify(), func(c *gin.Context) {
+			roles := c.Query("roles")
 			var tokenInfo model.TokenInfo
 			ti := c.MustGet("AccessToken")
 			bodyBytes, _ := json.Marshal(ti)
@@ -197,7 +198,7 @@ func main() {
 			if permissionCheck {
 				var clientInf model.Client
 				clientInf.UserID = userID
-				clientInf, err = DBManager.RegistrationClient(clientInf)
+				clientInf, err = DBManager.RegistrationClient(clientInf, roles)
 				if err != nil {
 					c.String(http.StatusBadRequest, err.Error())
 					return

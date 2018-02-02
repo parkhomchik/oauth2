@@ -1,6 +1,9 @@
 package db
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/parkhomchik/oauth2/model"
 	"github.com/parkhomchik/oauth2/utils"
 	uuid "github.com/satori/go.uuid"
@@ -34,6 +37,10 @@ func (dbm *DBManager) GetScopesClient(id uuid.UUID) []model.Scope {
 	return scopes
 }
 
+func (dbm *DBManager) PostScopesClient(clientScope model.ClientScopes) error {
+	return dbm.DB.Save(&clientScope).Error
+}
+
 func (dbm *DBManager) ClientScope(clientID, role string) error {
 	var client model.Client
 	dbm.DB.Where("ID = ?", clientID).First(&client)
@@ -43,12 +50,26 @@ func (dbm *DBManager) ClientScope(clientID, role string) error {
 	return dbm.DB.Where("client_id = ? AND scope_id = ?", client.ID, scope.ID).First(&clientScope).Error
 }
 
-func (dbm *DBManager) RegistrationClient(client model.Client) (model.Client, error) {
+func (dbm *DBManager) RegistrationClient(client model.Client, roles string) (model.Client, error) {
+	var clientScope model.ClientScopes
 	err := dbm.DB.Create(&client).Error
 	if err == nil {
 		client.Secret = utils.EncryptPassword(client.ID.String())
 		err = dbm.DB.Save(&client).Error
-		return client, err
+		if roles != "" {
+			scopes := strings.Split(roles, ",")
+			for _, s := range scopes {
+				scope, err := dbm.GetScopeByName(s)
+				if err == nil {
+					clientScope.ClientID = client.ID
+					clientScope.ScopeID = scope.ID
+					err = dbm.PostScopesClient(clientScope)
+					if err != nil {
+						fmt.Println("Error client post scope: ", err)
+					}
+				}
+			}
+		}
 	}
 	return client, err
 }
