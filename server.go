@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,39 +9,34 @@ import (
 
 	"github.com/satori/go.uuid"
 
+	"github.com/parkhomchik/oauth2/db"
 	"github.com/parkhomchik/oauth2/model"
 	"github.com/parkhomchik/oauth2/oauth"
+	"github.com/parkhomchik/oauth2/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-oauth2/gin-server"
-	"github.com/jinzhu/gorm"
 	"gopkg.in/oauth2.v3/manage"
 	aserver "gopkg.in/oauth2.v3/server"
 	"gopkg.in/oauth2.v3/store"
 
-	"golang.org/x/crypto/sha3"
-
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
-//Db переменная для конекции
-var Db *gorm.DB
-
-//PortalDb переменная для конекции
-var PortalDb *gorm.DB
+//DBManager Для работы с базой
+var DBManager db.DBManager
 
 func main() {
-	//fmt.Println("password: ", encryptPassword("test"))
-	initDB()
+	DBManager.InitDB()
 
 	manager := manage.NewDefaultManager()
 
 	manager.MustTokenStorage(store.NewMemoryTokenStore())
 	clientStore := store.NewClientStore()
 
-	clients := getClient()
+	clients := DBManager.GetClient()
 	for _, c := range clients {
-		scopes := getScopesClient(c.ID)
+		scopes := DBManager.GetScopesClient(c.ID)
 		var scopesString []string
 		for _, s := range scopes {
 			scopesString = append(scopesString, s.Name)
@@ -57,9 +51,9 @@ func main() {
 		fmt.Println("Scope: ", client.Scope)
 		clientStore.Set(client.ID, client)
 	}
-	users := getUsers()
+	users := DBManager.GetUsers()
 	for _, u := range users {
-		scopes := getScopesUser(u.ID)
+		scopes := DBManager.GetScopesUser(u.ID)
 
 		var scopesString []string
 		for _, s := range scopes {
@@ -109,9 +103,10 @@ func main() {
 			return
 		}
 		if userInf.Password != "" {
-			userInf.Password = encryptPassword(userInf.Password)
+			userInf.Password = utils.EncryptPassword(userInf.Password)
 		}
-		userInf, err := registrationUser(userInf)
+
+		userInf, err := DBManager.RegistrationUser(userInf)
 		if err != nil {
 			c.String(http.StatusBadRequest, err.Error())
 			return
@@ -146,8 +141,8 @@ func main() {
 
 			bodyBytes, _ := json.Marshal(ti)
 			json.Unmarshal(bodyBytes, &tokenInfo)
-
-			if err := Db.Where("id = ?", tokenInfo.UserID).Find(&user).Error; err != nil {
+			user, err := DBManager.GetUserByID(tokenInfo.UserID)
+			if err != nil {
 				c.JSON(404, err)
 				return
 			}
@@ -166,8 +161,8 @@ func main() {
 
 			bodyBytes, _ := json.Marshal(ti)
 			json.Unmarshal(bodyBytes, &tokenInfo)
-
-			if err := Db.Where("id = ? and user_id = ?", id, tokenInfo.UserID).Find(&client).Error; err != nil {
+			client, err = DBManager.GetClientByID(id, tokenInfo.UserID)
+			if err != nil {
 				c.JSON(404, err)
 				return
 			}
@@ -181,9 +176,9 @@ func main() {
 				return
 			}
 			if userInf.Password != "" {
-				userInf.Password = encryptPassword(userInf.Password)
+				userInf.Password = utils.EncryptPassword(userInf.Password)
 			}
-			userInf, err := setUserInfo(userInf)
+			userInf, err := DBManager.SetUserInfo(userInf)
 			if err != nil {
 				c.String(http.StatusBadRequest, err.Error())
 				return
@@ -202,7 +197,7 @@ func main() {
 			if permissionCheck {
 				var clientInf model.Client
 				clientInf.UserID = userID
-				clientInf, err = registrationClient(clientInf)
+				clientInf, err = DBManager.RegistrationClient(clientInf)
 				if err != nil {
 					c.String(http.StatusBadRequest, err.Error())
 					return
@@ -224,153 +219,52 @@ func main() {
 				id, err := uuid.FromString(c.Param("id"))
 				if err != nil {
 					c.JSON(400, err)
+					return
 				}
 				var client model.Client
-				client, err = getClientByID(id, userID)
+				client, err = DBManager.GetClientByID(id, userID)
 				if err != nil {
 					c.JSON(404, err)
+					return
 				}
-				if err := deleteClient(client); err != nil {
+				scopeErr := DBManager.DeleteClientScope(client)
+				if scopeErr != nil {
+					fmt.Println("Delete client scope error: ", scopeErr)
+				}
+				if err := DBManager.DeleteClient(client); err != nil {
 					c.JSON(500, err)
 					return
 				}
-				c.JSON(http.StatusOK, client)
+				c.JSON(http.StatusOK, scopeErr)
 			} else {
 				c.JSON(550, err)
 			}
 		})
+
+		connect.DELETE("/user/:id", server.HandleTokenVerify(), func(c *gin.Context) {
+			id, err := uuid.FromString(c.Param("id"))
+			if err != nil {
+				c.JSON(400, err)
+				return
+			}
+			var user model.User
+			user, err = DBManager.GetUserByID(id)
+			if err != nil {
+				c.JSON(404, err)
+				return
+			}
+			scopeErr := DBManager.DeleteUserScope(user) //аналогично клиенту
+			if scopeErr != nil {
+				fmt.Println("Delete user scope error: ", scopeErr)
+			}
+			if err := DBManager.DeleteUser(user); err != nil {
+				c.JSON(500, err)
+				return
+			}
+			c.JSON(http.StatusOK, scopeErr)
+		})
 	}
 	g.Run(":9096")
-}
-
-func clientScopeHandler(clientID, scope string) (allowed bool, err error) {
-	scopes := strings.Split(scope, " ")
-	for _, s := range scopes {
-		if err := clientScope(clientID, s); err != nil {
-			return false, err
-		}
-	}
-	return true, nil
-}
-
-func userScopeHandler(userID uuid.UUID, scope string) (allowed bool, err error) {
-	scopes := strings.Split(scope, " ")
-	for _, s := range scopes {
-		if err := userScope(userID, s); err != nil {
-			return false, err
-		}
-	}
-	return true, nil
-}
-
-func passwordAuthorizationHandler(username, password string) (userID string, err error) {
-	user, err := login(username, encryptPassword(password))
-	return fmt.Sprint(user.ID), err
-}
-
-func encryptPassword(password string) string {
-	h := sha3.New512()
-	h.Write([]byte(password))
-	b := h.Sum(nil)
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-func initDB() {
-	var configuration model.Configuration
-	configuration.Load()
-	dbinfo := fmt.Sprintf("host=%s user=%s dbname=%s password=%s sslmode=disable", configuration.DbHost, configuration.DbUser, configuration.DbName, configuration.DbPass)
-	//Db, _ = gorm.Open("postgres", dbinfo)
-	var err error
-	Db, err = gorm.Open("postgres", dbinfo)
-	if err != nil {
-		fmt.Println(err)
-		panic(err)
-	}
-	//defer Db.Close()
-
-	Db.LogMode(true)
-	Db.AutoMigrate(&model.User{}, &model.Client{}, &model.Scope{})
-}
-
-func initPortalDB() {
-	var configuration model.Configuration
-	configuration.Load()
-	dbinfo := fmt.Sprintf("host=%s user=%s dbname=%s password=%s sslmode=disable", configuration.DbPortalHost, configuration.DbPortalUser, configuration.DbPortalName, configuration.DbPortalPass)
-	var err error
-	PortalDb, err = gorm.Open("postgres", dbinfo)
-	if err != nil {
-		fmt.Println(err)
-		panic(err)
-	}
-	PortalDb.LogMode(true)
-}
-
-func getClient() []model.Client {
-	var clients []model.Client
-	Db.Find(&clients)
-	return clients
-}
-
-func getClientByID(id, userID uuid.UUID) (model.Client, error) {
-	var client model.Client
-	err := Db.Where("id = ? and user_id = ?", id, userID).Find(&client).Error
-	return client, err
-}
-
-func getScopesClient(id uuid.UUID) []model.Scope {
-	var clientScopeID []model.ClientScopes
-	var scopes []model.Scope
-	Db.Where("client_id = ?", id).Find(&clientScopeID)
-	var scopeIDs []uuid.UUID
-
-	for _, uid := range clientScopeID {
-		scopeIDs = append(scopeIDs, uid.ScopeID)
-	}
-
-	Db.Where("id in (?)", scopeIDs).Find(&scopes)
-
-	return scopes
-}
-
-func getUsers() (users []model.User) {
-	Db.Find(&users)
-	return
-}
-
-func getScopesUser(id uuid.UUID) []model.Scope {
-	var userScopeID []model.UserScopes
-	var scopes []model.Scope
-	Db.Where("user_id = ?", id).Find(&userScopeID)
-	var scopeIDs []uuid.UUID
-	for _, uid := range userScopeID {
-		scopeIDs = append(scopeIDs, uid.ScopeID)
-	}
-	Db.Where("id in (?)", scopeIDs).Find(&scopes)
-	return scopes
-}
-
-func login(username, password string) (model.User, error) {
-	var user model.User
-	err := Db.Where("login = ? AND password = ?", username, password).First(&user).Error
-	return user, err
-}
-
-func clientScope(clientID, role string) error {
-	var client model.Client
-	Db.Where("ID = ?", clientID).First(&client)
-	var scope model.Scope
-	Db.Where("name = ?", role).First(&scope)
-	var clientScope model.ClientScopes
-	return Db.Where("client_id = ? AND scope_id = ?", client.ID, scope.ID).First(&clientScope).Error
-}
-
-func userScope(userID uuid.UUID, role string) error {
-	var user model.User
-	Db.Where("ID = ?", userID).First(&user)
-	var scope model.Scope
-	Db.Where("name = ?", role).First(&scope)
-	var userScope model.UserScopes
-	return Db.Where("user_id = ? AND scope_id = ?", user.ID, scope.ID).First(&userScope).Error
 }
 
 func setCORSMiddleware() gin.HandlerFunc {
@@ -386,43 +280,27 @@ func setCORSMiddleware() gin.HandlerFunc {
 	}
 }
 
-func registrationUser(user model.User) (model.User, error) {
-	if err := Db.Create(&user).Error; err != nil {
-		return user, err
+func clientScopeHandler(clientID, scope string) (allowed bool, err error) {
+	scopes := strings.Split(scope, " ")
+	for _, s := range scopes {
+		if err := DBManager.ClientScope(clientID, s); err != nil {
+			return false, err
+		}
 	}
-	/*
-		initPortalDB()
-		var staff model.Staff
-		staff.Name = user.Name
-
-		err := PortalDb.Create(&staff).Error
-		PortalDb.Close()
-	*/
-	return user, nil
+	return true, nil
 }
 
-func registrationClient(client model.Client) (model.Client, error) {
-	err := Db.Create(&client).Error
-	if err == nil {
-		client.Secret = encryptPassword(client.ID.String())
-		err = Db.Save(&client).Error
-		return client, err
+func userScopeHandler(userID uuid.UUID, scope string) (allowed bool, err error) {
+	scopes := strings.Split(scope, " ")
+	for _, s := range scopes {
+		if err := DBManager.UserScope(userID, s); err != nil {
+			return false, err
+		}
 	}
-	return client, err
+	return true, nil
 }
 
-func setUserInfo(userInf model.User) (model.User, error) {
-	var user model.User
-	if err := Db.Where("id = ?", userInf.ID).First(&user).Error; err != nil {
-		return user, err
-	}
-	user = userInf
-	if err := Db.Save(&userInf).Error; err != nil {
-		return user, err
-	}
-	return user, nil
-}
-
-func deleteClient(client model.Client) error {
-	return Db.Delete(&client).Error
+func passwordAuthorizationHandler(username, password string) (userID string, err error) {
+	user, err := DBManager.Login(username, utils.EncryptPassword(password))
+	return fmt.Sprint(user.ID), err
 }
