@@ -54,7 +54,7 @@ func (dbm *DBManager) RegistrationClient(client model.Client, roles string) (mod
 	var clientScope model.ClientScopes
 	err := dbm.DB.Create(&client).Error
 	if err == nil {
-		client.Secret = utils.EncryptPassword(client.ID.String())
+		client.Secret = utils.GenerateSecret()
 		err = dbm.DB.Save(&client).Error
 		if roles != "" {
 			scopes := strings.Split(roles, ",")
