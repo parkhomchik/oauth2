@@ -1,6 +1,9 @@
 package db
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/parkhomchik/oauth2/model"
 	uuid "github.com/satori/go.uuid"
 )
@@ -37,9 +40,24 @@ func (dbm *DBManager) UserScope(userID uuid.UUID, role string) error {
 	return dbm.DB.Where("user_id = ? AND scope_id = ?", user.ID, scope.ID).First(&userScope).Error
 }
 
-func (dbm *DBManager) RegistrationUser(user model.User) (model.User, error) {
+func (dbm *DBManager) RegistrationUser(user model.User, roles string) (model.User, error) {
 	if err := dbm.DB.Create(&user).Error; err != nil {
 		return user, err
+	}
+	if roles != "" {
+		var userScope model.UserScopes
+		scopes := strings.Split(roles, ",")
+		for _, s := range scopes {
+			scope, err := dbm.GetScopeByName(s)
+			if err == nil {
+				userScope.UserID = user.ID
+				userScope.ScopeID = scope.ID
+				err = dbm.PostScopesUser(userScope)
+				if err != nil {
+					fmt.Println("Error user post scope: ", err)
+				}
+			}
+		}
 	}
 	/*
 		initPortalDB()
@@ -80,4 +98,8 @@ func (dbm *DBManager) Login(username, password string) (model.User, error) {
 	var user model.User
 	err := dbm.DB.Where("login = ? AND password = ?", username, password).First(&user).Error
 	return user, err
+}
+
+func (dbm *DBManager) PostScopesUser(userScope model.UserScopes) error {
+	return dbm.DB.Save(&userScope).Error
 }

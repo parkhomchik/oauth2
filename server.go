@@ -97,6 +97,7 @@ func main() {
 		c.String(http.StatusOK, string(data))
 	})
 	g.POST("/registrationuser", func(c *gin.Context) {
+		roles := c.Query("roles")
 		var userInf model.User
 		if err := c.Bind(&userInf); err != nil {
 			c.JSON(http.StatusBadRequest, err)
@@ -106,7 +107,7 @@ func main() {
 			userInf.Password = utils.EncryptPassword(userInf.Password)
 		}
 
-		userInf, err := DBManager.RegistrationUser(userInf)
+		userInf, err := DBManager.RegistrationUser(userInf, roles)
 		if err != nil {
 			c.String(http.StatusBadRequest, err.Error())
 			return
