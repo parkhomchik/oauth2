@@ -14,4 +14,4 @@
 .glide/
 
 .DS_Store
-config/**
+config/
