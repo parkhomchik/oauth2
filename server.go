@@ -119,9 +119,7 @@ func main() {
 	{
 		auth.GET("/token", server.HandleTokenRequest)  //Получение токена client_credentials, password
 		auth.POST("/token", server.HandleTokenRequest) //Получение токена client_credentials, password
-
-		auth.GET("")
-		checkToken := auth.Group("/check") //Проверка токена
+		checkToken := auth.Group("/check")             //Проверка токена
 		checkToken.Use(server.HandleTokenVerify())
 		checkToken.GET("", func(c *gin.Context) {
 			ti, exists := c.Get("AccessToken")
