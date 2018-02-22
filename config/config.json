@@ -2,9 +2,5 @@
     "DbHost": "192.168.8.107",
 	"DbUser": "pi",
     "DbPass": "parkhom4ik",
-    "DbName": "oauth_db",
-    "DbPortalHost": "localhost",
-	"DbPortalUser": "fba_user",
-    "DbPortalPass": "password",
-    "DbPortalName": "edp0001"
+    "DbName": "oauth_db"
 }
