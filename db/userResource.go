@@ -70,7 +70,6 @@ func (dbm *DBManager) RegistrationUser(user model.User, roles string, configurat
 			fmt.Println("Error staff create: ", err)
 		}
 	}
-	fmt.Println("Staff ID - ", staff.ID)
 	dbm.PortalDB.Close()
 	return user, nil
 }
