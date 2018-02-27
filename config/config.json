@@ -2,5 +2,9 @@
     "DbHost": "192.168.8.107",
 	"DbUser": "pi",
     "DbPass": "parkhom4ik",
-    "DbName": "oauth_db"
+    "DbName": "oauth_db",
+    "PortalDbHost": "192.168.8.107",
+	"PortalDbUser": "pi",
+    "PortalDbPass": "parkhom4ik",
+    "PortalDbName": "fba"
 }

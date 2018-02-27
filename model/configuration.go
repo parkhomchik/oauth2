@@ -11,10 +11,10 @@ type Configuration struct {
 	DbPass       string
 	DbName       string
 	DbHost       string
-	DbPortalHost string
-	DbPortalUser string
-	DbPortalPass string
-	DbPortalName string
+	PortalDbHost string
+	PortalDbUser string
+	PortalDbPass string
+	PortalDbName string
 }
 
 //Load Загрузка настроек из файла конфигураций

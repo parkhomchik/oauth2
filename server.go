@@ -25,9 +25,11 @@ import (
 
 //DBManager Для работы с базой
 var DBManager db.DBManager
+var Configuration model.Configuration
 
 func main() {
-	DBManager.InitDB()
+	Configuration.Load()
+	DBManager.InitDB(Configuration)
 
 	manager := manage.NewDefaultManager()
 
@@ -107,7 +109,7 @@ func main() {
 			userInf.Password = utils.EncryptPassword(userInf.Password)
 		}
 
-		userInf, err := DBManager.RegistrationUser(userInf, roles)
+		userInf, err := DBManager.RegistrationUser(userInf, roles, Configuration)
 		if err != nil {
 			c.String(http.StatusBadRequest, err.Error())
 			return

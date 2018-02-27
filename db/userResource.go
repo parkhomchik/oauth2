@@ -40,7 +40,7 @@ func (dbm *DBManager) UserScope(userID uuid.UUID, role string) error {
 	return dbm.DB.Where("user_id = ? AND scope_id = ?", user.ID, scope.ID).First(&userScope).Error
 }
 
-func (dbm *DBManager) RegistrationUser(user model.User, roles string) (model.User, error) {
+func (dbm *DBManager) RegistrationUser(user model.User, roles string, configuration model.Configuration) (model.User, error) {
 	if err := dbm.DB.Create(&user).Error; err != nil {
 		return user, err
 	}
@@ -59,14 +59,19 @@ func (dbm *DBManager) RegistrationUser(user model.User, roles string) (model.Use
 			}
 		}
 	}
-	/*
-		initPortalDB()
-		var staff model.Staff
-		staff.Name = user.Name
-
-		err := PortalDb.Create(&staff).Error
-		PortalDb.Close()
-	*/
+	dbm.InitPortalDB(configuration)
+	var staff model.Staff
+	staff.Name = user.Name
+	staff.RoleID, _ = uuid.FromString("a99ecef5-0aa0-424b-83c6-b470462cbe65")
+	staff.UserID = user.ID
+	if dbm.PortalDB.NewRecord(&staff) {
+		err := dbm.PortalDB.Create(&staff).Error
+		if err != nil {
+			fmt.Println("Error staff create: ", err)
+		}
+	}
+	fmt.Println("Staff ID - ", staff.ID)
+	dbm.PortalDB.Close()
 	return user, nil
 }
 
