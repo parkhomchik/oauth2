@@ -10,7 +10,15 @@ type Staff struct {
 	UserID   uuid.UUID `json:"-"` //Связь с oauth
 }
 
-//TableName переопределяем имя таблицы
 func (Staff) TableName() string {
 	return "staff"
+}
+
+type Role struct {
+	ID   uuid.UUID `gorm:"primary_key;type:uuid;default:uuid_generate_v4()"`
+	Name string    `gorm:"type:varchar;"`
+}
+
+func (Role) TableName() string {
+	return "role"
 }

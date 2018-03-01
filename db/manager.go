@@ -23,7 +23,7 @@ func (dbm *DBManager) InitDB(configuration model.Configuration) {
 	}
 
 	dbm.DB.LogMode(true)
-	dbm.DB.AutoMigrate(&model.User{}, &model.Client{}, &model.Scope{})
+	dbm.DB.AutoMigrate(&model.User{}, &model.Client{}, &model.Scope{}, &model.ClientScopes{}, &model.UserScopes{})
 }
 
 func (dbm *DBManager) InitPortalDB(configuration model.Configuration) {

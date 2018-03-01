@@ -60,12 +60,17 @@ func (dbm *DBManager) RegistrationUser(user model.User, roles string, configurat
 		}
 	}
 	dbm.InitPortalDB(configuration)
+	var role model.Role
+	err := dbm.PortalDB.Where("short_name = ?", "owner").First(&role).Error
+	if err != nil {
+		fmt.Println("Error staff get role: ", err)
+	}
 	var staff model.Staff
 	staff.Name = user.Name
-	staff.RoleID, _ = uuid.FromString("a99ecef5-0aa0-424b-83c6-b470462cbe65")
+	staff.RoleID = role.ID
 	staff.UserID = user.ID
 	if dbm.PortalDB.NewRecord(&staff) {
-		err := dbm.PortalDB.Create(&staff).Error
+		err = dbm.PortalDB.Create(&staff).Error
 		if err != nil {
 			fmt.Println("Error staff create: ", err)
 		}
