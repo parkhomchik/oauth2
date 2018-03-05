@@ -14,5 +14,5 @@ type User struct {
 	Name      string
 	Login     string `gorm:"not null;unique"`
 	Password  string
-	Scopes    []Scope `gorm:"many2many:user_scopes;"`
+	Scopes    string
 }
